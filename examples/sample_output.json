@@ -1,0 +1,13 @@
+{
+  "candidate_id": "CAND-001",
+  "session_id": "SES-001",
+  "integrity_score": 65,
+  "risk_category": "moderate",
+  "event_summary": "2 monitoring event(s) were recorded.",
+  "important_evidence": [
+    "Face Absent (severity: medium, confidence: 0.92), duration: 10 seconds",
+    "Multiple Faces (severity: high, confidence: 0.87)"
+  ],
+  "ai_summary": "The session has an integrity score of 65/100 and is classified as moderate risk. 2 monitoring event(s) were recorded. The invigilator should review the available evidence before making a decision. These events alone do not establish misconduct.",
+  "review_status": "pending"
+}

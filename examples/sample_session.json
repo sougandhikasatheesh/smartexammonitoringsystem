@@ -1,0 +1,25 @@
+
+{
+  "candidate_id": "CAND-001",
+  "session_id": "SES-001",
+  "integrity_score": 65,
+  "risk_category": "moderate",
+  "events": [
+    {
+      "event_type": "face_absent",
+      "timestamp": "2026-10-21T10:15:00Z",
+      "severity": "medium",
+      "confidence": 0.92,
+      "metadata": {
+        "duration_seconds": 10
+      }
+    },
+    {
+      "event_type": "multiple_faces",
+      "timestamp": "2026-10-21T10:20:00Z",
+      "severity": "high",
+      "confidence": 0.87,
+      "metadata": {}
+    }
+  ]
+}
