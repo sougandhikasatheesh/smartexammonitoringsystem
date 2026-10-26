@@ -43,6 +43,21 @@ def init_db():
             FOREIGN KEY (exam_id) REFERENCES exams(id)
         );
     """)
+    connection.execute(
+            """
+            INSERT INTO exams (title, description, duration_minutes)
+            SELECT ?, ?, ?
+            WHERE NOT EXISTS (
+                SELECT 1 FROM exams WHERE title = ?
+            )
+            """,
+            (
+                "Sample Online Exam",
+                "A sample exam for Sprint 2 testing",
+                60,
+                "Sample Online Exam",
+            ),
+        )
 
     connection.commit()
     connection.close()

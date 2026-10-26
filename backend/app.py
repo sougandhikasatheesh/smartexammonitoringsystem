@@ -3,7 +3,7 @@ import os
 from flask import Flask, jsonify
 from backend.database import init_db
 from backend.routes.auth import auth_bp
-
+from backend.routes.exam import exam_bp
 
 def create_app():
     app = Flask(__name__)
@@ -21,6 +21,7 @@ def create_app():
 
     # Register authentication routes
     app.register_blueprint(auth_bp, url_prefix="/api/v1/auth")
+    app.register_blueprint(exam_bp, url_prefix="/api/v1")
 
     @app.route("/")
     def home():

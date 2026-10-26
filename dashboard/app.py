@@ -1,145 +1,139 @@
 
 import json
-import sys
 from pathlib import Path
 
+import requests
 import streamlit as st
 
-# Add the project root so Python can import ai_service.
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PROJECT_ROOT))
-
-from ai_service import generate_report
-
-
 SAMPLE_PATH = PROJECT_ROOT / "examples" / "sample_session.json"
+API_URL = "http://127.0.0.1:5000/api/v1"
 
+st.set_page_config(page_title="ExamGuard", page_icon="🛡️", layout="wide")
+st.title("ExamGuard — Smart Exam Monitoring")
+st.caption("Sprint 2 | Login, Exam Selection and Session Management")
 
-st.set_page_config(
-    page_title="ExamGuard | AI Reporting",
-    page_icon="🛡️",
-    layout="wide",
-)
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "candidate" not in st.session_state:
+    st.session_state.candidate = None
+if "session_id" not in st.session_state:
+    st.session_state.session_id = None
+if "login_cookie" not in st.session_state:
+    st.session_state.login_cookie = None
 
-st.title("🛡️ ExamGuard")
-st.subheader("Smart Exam Monitoring — Invigilator Dashboard")
+if not st.session_state.logged_in:
+    st.subheader("Candidate Login")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
 
-st.caption(
-    "Sprint 1 prototype | Sample data | Mock report generation"
-)
+    if st.button("Login", type="primary"):
+        try:
+            response = requests.post(
+                f"{API_URL}/auth/login",
+                json={"email": email, "password": password},
+                timeout=10,
+            )
+            if response.status_code == 200:
+                st.session_state.logged_in = True
+                st.session_state.candidate = response.json()["candidate"]
+                st.session_state.login_cookie = response.cookies.get("session")
+                st.success("Login successful!")
+                st.rerun()
+            else:
+                st.error(response.json().get("error", "Login failed"))
+        except requests.RequestException as error:
+            st.error(f"Cannot connect to backend: {error}")
 
-
-def load_sample_session():
-    with SAMPLE_PATH.open("r", encoding="utf-8") as file:
-        return json.load(file)
-
-
-# Load the fictional exam session.
-try:
-    session_data = load_sample_session()
-    report = generate_report(session_data)
-
-except Exception as error:
-    st.error(f"Unable to load or generate the report: {error}")
     st.stop()
 
+candidate = st.session_state.candidate
+st.success(f"Logged in as {candidate['name']}")
 
-# Candidate information
-st.markdown("### Candidate Information")
+if st.button("Logout"):
+    try:
+        requests.post(
+            f"{API_URL}/auth/logout",
+            cookies={"session": st.session_state.login_cookie}
+            if st.session_state.login_cookie else {},
+            timeout=10,
+        )
+    except requests.RequestException:
+        pass
+    st.session_state.logged_in = False
+    st.session_state.candidate = None
+    st.session_state.login_cookie = None
+    st.session_state.session_id = None
+    st.rerun()
 
-info1, info2 = st.columns(2)
+st.subheader("Candidate Details")
+st.write(f"**Name:** {candidate['name']}")
+st.write(f"**Email:** {candidate['email']}")
+st.write(f"**Candidate ID:** {candidate['id']}")
 
-info1.text_input(
-    "Candidate ID",
-    value=report["candidate_id"],
-    disabled=True,
+cookies = (
+    {"session": st.session_state.login_cookie}
+    if st.session_state.login_cookie else {}
 )
 
-info2.text_input(
-    "Session ID",
-    value=report["session_id"],
-    disabled=True,
-)
+st.subheader("Available Exams")
 
+try:
+    response = requests.get(f"{API_URL}/exams", timeout=10)
+    response.raise_for_status()
+    exams = response.json().get("exams", [])
 
-# Session metrics
-st.markdown("### Session Overview")
+    if not exams:
+        st.info("No exams are available.")
+    else:
+        exam_options = {
+            f"{exam['title']} — {exam['duration_minutes']} minutes (ID: {exam['id']})": exam
+            for exam in exams
+        }
+        selected_label = st.selectbox(
+            "Select an exam",
+            list(exam_options.keys()),
+        )
+        selected_exam = exam_options[selected_label]
 
-col1, col2, col3 = st.columns(3)
+        st.write(f"**Description:** {selected_exam.get('description') or 'No description'}")
 
-col1.metric(
-    "Integrity Score",
-    f'{report["integrity_score"]}/100',
-)
+        if st.button("Start Exam", type="primary"):
+            try:
+                start_response = requests.post(
+                    f"{API_URL}/sessions/start",
+                    json={"exam_id": selected_exam["id"]},
+                    cookies=cookies,
+                    timeout=10,
+                )
+                if start_response.status_code == 201:
+                    result = start_response.json()
+                    st.session_state.session_id = result["session_id"]
+                    st.success("Exam session started!")
+                else:
+                    st.error(
+                        start_response.json().get(
+                            "error", "Could not start the exam"
+                        )
+                    )
+            except requests.RequestException as error:
+                st.error(f"Session request failed: {error}")
 
-col2.metric(
-    "Risk Category",
-    report["risk_category"].title(),
-)
+except requests.RequestException as error:
+    st.error(f"Could not load exams: {error}")
 
-col3.metric(
-    "Events Recorded",
-    len(session_data["events"]),
-)
+if st.session_state.session_id:
+    st.subheader("Active Session")
+    st.write(f"**Session ID:** {st.session_state.session_id}")
+    st.write(f"**Exam:** {selected_exam['title']}")
+    st.write("**Status:** In progress")
 
+st.divider()
+st.subheader("Mock Report Preview")
 
-# Observed events
-st.markdown("### Observed Events")
-
-if session_data["events"]:
-    for index, event in enumerate(session_data["events"], start=1):
-        with st.expander(
-            f'{index}. {event["event_type"].replace("_", " ").title()}'
-        ):
-            st.write(f'**Timestamp:** {event["timestamp"]}')
-            st.write(f'**Severity:** {event["severity"].title()}')
-            st.write(f'**Confidence:** {event["confidence"]:.2f}')
-            st.json(event.get("metadata", {}))
-else:
-    st.info("No monitoring events were recorded.")
-
-
-# Report summary
-st.markdown("### Integrity Report")
-
-st.write("**Event Summary**")
-st.write(report["event_summary"])
-
-st.write("**Important Evidence**")
-
-if report["important_evidence"]:
-    for evidence in report["important_evidence"]:
-        st.write(f"- {evidence}")
-else:
-    st.write("No evidence items were recorded.")
-
-st.write("**AI-Style Summary**")
-st.info(report["ai_summary"])
-
-st.caption(
-    "This is a deterministic mock summary, not a live AI-generated response."
-)
-
-
-# Human review section
-st.markdown("### Invigilator Review")
-
-if "review_status" not in st.session_state:
-    st.session_state.review_status = "Pending"
-
-st.write(f"**Review Status:** {st.session_state.review_status}")
-
-review_col1, review_col2 = st.columns(2)
-
-with review_col1:
-    if st.button("Mark as Reviewed", use_container_width=True):
-        st.session_state.review_status = "Reviewed"
-
-with review_col2:
-    if st.button("Keep Pending", use_container_width=True):
-        st.session_state.review_status = "Pending"
-
-st.caption(
-    "Review status is stored only for the current Streamlit session. "
-    "It is not saved to a database."
-)
+try:
+    with SAMPLE_PATH.open("r", encoding="utf-8") as file:
+        sample_data = json.load(file)
+    st.json(sample_data)
+except (OSError, json.JSONDecodeError) as error:
+    st.error(f"Could not load sample report data: {error}")
